@@ -1,0 +1,41 @@
+Muse — album fluid background / third-party notice
+
+Playback rendering references reviewed:
+Apple Music-like lyrics (AMLL), @applemusic-like-lyrics/core, AGPL-3.0-only,
+commit 9db9236818464ce83f696ee9c5ff0e5395cb744a:
+https://github.com/amll-dev/applemusic-like-lyrics/blob/9db9236818464ce83f696ee9c5ff0e5395cb744a/packages/core/src/bg-render/mesh-renderer/index.ts
+https://github.com/amll-dev/applemusic-like-lyrics/blob/9db9236818464ce83f696ee9c5ff0e5395cb744a/packages/core/src/bg-render/pixi-renderer.ts
+The former maps a filtered album texture onto a mesh. The latter applies two
+Pixi BulgePinchFilters to album art. No AMLL source or WebGL presets bundled.
+
+Code actually adapted:
+PixiJS Filters, @pixi/filter-bulge-pinch v5.1.1 (MIT)
+Git commit d737dd1d7c661823b25741b3fdc0a3045512bebc
+https://github.com/pixijs/filters/tree/d737dd1d7c661823b25741b3fdc0a3045512bebc/filters/bulge-pinch
+https://registry.npmjs.org/@pixi/filter-bulge-pinch/-/filter-bulge-pinch-5.1.1.tgz
+The positive-strength branch of the fragment shader is translated to Kotlin
+(bulgeScale). Muse composes two moving centers on bounded Android mesh vertices
+rather than sampling two render targets. The album color field, clock and mesh
+construction are native Muse code. No Pixi or AMLL runtime is required.
+
+The MIT License
+
+Copyright (c) 2013-2017 Mathew Groves, Chad Engler
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
