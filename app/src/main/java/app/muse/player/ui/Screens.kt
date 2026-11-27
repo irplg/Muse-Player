@@ -676,7 +676,11 @@ fun SettingsScreen(onBack: () -> Unit, onAbout: () -> Unit) {
             )
         }
         ListGroup {
-            ListRow("关于 Muse", icon = Glyphs.Info, value = "0.2.0", showChevron = true, onClick = onAbout)
+            // 直接读安装包的 versionName，避免改了 build.gradle 忘了改这里。
+            val version = runCatching {
+                ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+            }.getOrNull() ?: "—"
+            ListRow("关于 Muse", icon = Glyphs.Info, value = version, showChevron = true, onClick = onAbout)
             Hairline(Modifier.padding(start = 49.dp))
             ListRow("导出日志", icon = Glyphs.Share) { saveLogs.launch("muse-log.txt") }
         }

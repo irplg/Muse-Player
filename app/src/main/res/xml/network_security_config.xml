@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 全部接口与图片都走 HTTPS，禁止任何明文流量：既省掉引擎的“明文传输”扣分项，
+         也避免运营商劫持。如果以后确有 http 域名要放行，在下面单独开 domain-config。 -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

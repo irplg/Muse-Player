@@ -16,3 +16,4 @@ debug.keystore
 *.aab
 *.ap_
 .kotlin/
+keystore.properties

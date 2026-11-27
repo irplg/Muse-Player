@@ -124,6 +124,12 @@ class SpatialAudioProcessor : BaseAudioProcessor() {
     private var frameL = 0f
     private var frameR = 0f
 
+    /** 最近一次交出去的输出缓冲，用于识别「输入被退回成自己的输出」这种别名情况。 */
+    private var ownedOutput: ByteBuffer? = null
+
+    /** 直通 / 带余字节时的中转数组，按需增长后复用。 */
+    private var scratch = ByteArray(0)
+
     /** 注意不能用 setEnabled 作函数名：会和属性 enabled 的 setter 撞 JVM 签名。 */
     fun updateEnabled(on: Boolean) {
         if (enabled != on) {
@@ -144,24 +150,85 @@ class SpatialAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
-        val size = inputBuffer.remaining()
+        try {
+            processBuffer(inputBuffer)
+        } catch (t: Throwable) {
+            // 音频线程上抛任何异常都会让 ExoPlayer 直接结束这首歌（界面显示「播放失败」）。
+            // 兜底：这一次直通，宁可少一点效果，也别把播放打断。
+            android.util.Log.w("SpatialAudio", "处理音频缓冲失败，本次直通", t)
+            bypass(inputBuffer)
+        }
+    }
+
+    private fun processBuffer(inputBuffer: ByteBuffer) {
+        var src = inputBuffer
+        // AudioSink 在 AudioTrack 写不下时会把没消费完的 buffer 留着下次再喂；如果那个 buffer
+        // 恰好就是本处理器上一轮交出去的输出缓冲，replaceOutputBuffer() 返回的会是同一个对象，
+        // 直接 put 自己会触发 ByteBuffer 的 "The source buffer is this buffer" 而整首歌播放失败。
+        // 先把这段 PCM 脱离出去，再重置输出缓冲。
+        if (src === ownedOutput) {
+            val detached = ByteBuffer.allocateDirect(src.remaining()).order(ByteOrder.nativeOrder())
+            val carry = ByteArray(src.remaining())
+            src.get(carry)
+            detached.put(carry)
+            detached.flip()
+            src = detached
+        }
+        val size = src.remaining()
         val out = replaceOutputBuffer(size)
+        ownedOutput = out
         out.order(ByteOrder.nativeOrder())
+        if (size == 0) {
+            out.flip()
+            return
+        }
         val frameBytes = channels * bytesPerSample()
         if (!enabled || !pcm || channels != 2 || size < frameBytes) {
-            out.put(inputBuffer)
+            copyInto(out, src)
             out.flip()
             return
         }
         val frames = size / frameBytes
         when (encoding) {
-            C.ENCODING_PCM_FLOAT -> processFloat(inputBuffer, out, frames)
-            else -> process16(inputBuffer, out, frames)
+            C.ENCODING_PCM_FLOAT -> processFloat(src, out, frames)
+            else -> process16(src, out, frames)
         }
         // asShortBuffer/asFloatBuffer 是独立视图，不会推进原 buffer 的 position，这里手动对齐。
-        inputBuffer.position(inputBuffer.position() + frames * frameBytes)
+        src.position(src.position() + frames * frameBytes)
         // 末尾不足一帧的字节原样带过去。
-        if (inputBuffer.hasRemaining()) out.put(inputBuffer)
+        if (src.hasRemaining()) copyInto(out, src)
+        out.flip()
+    }
+
+    /**
+     * 把 [src] 剩下的字节搬进 [dst]，并让 [src] 走到 limit。
+     *
+     * 全程走字节数组而不是 `ByteBuffer.put(ByteBuffer)`：后者在源和目标共享内存（同一个
+     * buffer、或同一个 buffer 的 duplicate/slice）时要么抛异常要么把数据搅乱，而这里是
+     * 音频线程，出一次错就是整首歌播放失败。
+     */
+    private fun copyInto(dst: ByteBuffer, src: ByteBuffer) {
+        val n = src.remaining()
+        if (n == 0) return
+        // 复用同一个中转数组：关掉开关走直通时每 20~30 ms 就会来一次，不能每次都新建数组。
+        if (scratch.size < n) scratch = ByteArray(n)
+        src.get(scratch, 0, n)
+        dst.put(scratch, 0, n)
+    }
+
+    /** 兜底直通：把还没消费的字节原样搬出去。 */
+    private fun bypass(inputBuffer: ByteBuffer) {
+        val n = inputBuffer.remaining()
+        if (n == 0) {
+            replaceOutputBuffer(0).flip()
+            return
+        }
+        val bytes = ByteArray(n)
+        inputBuffer.duplicate().get(bytes)
+        inputBuffer.position(inputBuffer.limit())
+        val out = replaceOutputBuffer(n)
+        ownedOutput = out
+        out.put(bytes)
         out.flip()
     }
 
@@ -171,6 +238,7 @@ class SpatialAudioProcessor : BaseAudioProcessor() {
 
     override fun onReset() {
         clearState()
+        ownedOutput = null
     }
 
     private fun bytesPerSample(): Int = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2

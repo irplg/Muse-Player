@@ -50,7 +50,9 @@ object ImageLoaderLite {
         val bmp = try {
             when {
                 model.startsWith("http") -> {
-                    val url = if (model.contains("music.126.net") && !model.contains("?")) "$model?param=${px}y$px" else model
+                    // 清单里禁了明文流量，CDN 返回的 http 链接统一抬到 https（126.net 全站支持）。
+                    val secure = if (model.startsWith("http://")) "https://" + model.removePrefix("http://") else model
+                    val url = if (secure.contains("music.126.net") && !secure.contains("?")) "$secure?param=${px}y$px" else secure
                     http.newCall(Request.Builder().url(url).build()).execute().use { r ->
                         r.body?.byteStream()?.let { BitmapFactory.decodeStream(it) }
                     }
